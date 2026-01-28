@@ -1,12 +1,20 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Pause, Play, RotateCcw } from "lucide-react";
+import { Pause, Play, RotateCcw, AlertCircle, Loader } from "lucide-react";
 
 interface EyePosition {
   x: number;
   y: number;
   z: number;
+}
+
+declare global {
+  interface Window {
+    FaceMesh: any;
+    Camera: any;
+    DrawingUtils: any;
+  }
 }
 
 export default function Home() {
@@ -18,7 +26,8 @@ export default function Home() {
   const [showDebug, setShowDebug] = useState(true);
   const [fps, setFps] = useState(0);
   const [eyePos, setEyePos] = useState<EyePosition>({ x: 0, y: 0, z: 800 });
-  const [isLoading, setIsLoading] = useState(true);
+  const [isMediaPipeReady, setIsMediaPipeReady] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const eyePosEMARef = useRef<EyePosition>({ x: 0, y: 0, z: 800 });
   const lastTimeRef = useRef(Date.now());
@@ -26,36 +35,37 @@ export default function Home() {
   const isTrackingRef = useRef(true);
   const faceMeshRef = useRef<any>(null);
   const cameraRef = useRef<any>(null);
+  const isInitializedRef = useRef(false);
 
   const landmarkIndices = [4, 152, 263, 33, 308, 78];
 
-  // Initialize MediaPipe
+  // Check MediaPipe availability
   useEffect(() => {
-    const initializeMediaPipe = async () => {
+    const checkMediaPipe = () => {
+      if (window.FaceMesh && window.Camera) {
+        console.log("MediaPipe libraries loaded successfully");
+        setIsMediaPipeReady(true);
+        setError(null);
+      } else {
+        console.log("Waiting for MediaPipe libraries...");
+        setTimeout(checkMediaPipe, 500);
+      }
+    };
+
+    checkMediaPipe();
+  }, []);
+
+  // Initialize MediaPipe Camera and Face Mesh
+  useEffect(() => {
+    if (!isMediaPipeReady || isInitializedRef.current) return;
+
+    const initializeCamera = async () => {
       try {
-        // Load MediaPipe via CDN
-        const loadScript = (src: string): Promise<void> => {
-          return new Promise((resolve, reject) => {
-            const script = document.createElement("script");
-            script.src = src;
-            script.async = true;
-            script.onload = () => resolve();
-            script.onerror = () => reject(new Error(`Failed to load ${src}`));
-            document.head.appendChild(script);
-          });
-        };
-
-        // Load all required scripts
-        await loadScript("https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js");
-        await loadScript("https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js");
-        await loadScript("https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js");
-
-        // Access global objects
-        const { FaceMesh } = (window as any).FaceMesh;
-        const { Camera } = (window as any).Camera;
+        const FaceMesh = window.FaceMesh;
+        const Camera = window.Camera;
 
         if (!FaceMesh || !Camera) {
-          throw new Error("MediaPipe libraries not loaded");
+          throw new Error("MediaPipe libraries not available");
         }
 
         const faceMesh = new FaceMesh({
@@ -76,7 +86,11 @@ export default function Home() {
           const camera = new Camera(videoRef.current, {
             onFrame: async () => {
               if (isTrackingRef.current && videoRef.current) {
-                await faceMesh.send({ image: videoRef.current });
+                try {
+                  await faceMesh.send({ image: videoRef.current });
+                } catch (e) {
+                  console.error("Error sending frame to FaceMesh:", e);
+                }
               }
             },
             width: 640,
@@ -121,18 +135,23 @@ export default function Home() {
             }
           });
 
-          camera.start();
+          try {
+            camera.start();
+            isInitializedRef.current = true;
+            console.log("Camera started successfully");
+          } catch (e) {
+            console.error("Error starting camera:", e);
+            setError("カメラの起動に失敗しました");
+          }
         }
-
-        setIsLoading(false);
-      } catch (error) {
-        console.error("Failed to initialize MediaPipe:", error);
-        setIsLoading(false);
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        console.error("Failed to initialize camera:", errorMessage);
+        setError(errorMessage);
       }
     };
 
-    isTrackingRef.current = isTracking;
-    initializeMediaPipe();
+    initializeCamera();
 
     return () => {
       if (cameraRef.current) {
@@ -143,7 +162,12 @@ export default function Home() {
         }
       }
     };
-  }, []);
+  }, [isMediaPipeReady]);
+
+  // Update tracking state
+  useEffect(() => {
+    isTrackingRef.current = isTracking;
+  }, [isTracking]);
 
   // Wireframe room generation
   const generateWireframeRoom = () => {
@@ -302,6 +326,32 @@ export default function Home() {
         height="480"
       />
 
+      {/* Error message */}
+      {error && (
+        <div className="bg-red-900 border-b border-red-700 p-4">
+          <div className="max-w-6xl mx-auto flex items-center gap-3 text-red-100">
+            <AlertCircle className="w-5 h-5 flex-shrink-0" />
+            <div>
+              <p className="font-semibold">エラー</p>
+              <p className="text-sm">{error}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Loading message */}
+      {!isMediaPipeReady && !error && (
+        <div className="bg-blue-900 border-b border-blue-700 p-4">
+          <div className="max-w-6xl mx-auto flex items-center gap-3 text-blue-100">
+            <Loader className="w-5 h-5 flex-shrink-0 animate-spin" />
+            <div>
+              <p className="font-semibold">初期化中...</p>
+              <p className="text-sm">MediaPipeライブラリを読み込んでいます。</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Main canvas */}
       <div className="flex-1 flex items-center justify-center p-4">
         <canvas
@@ -325,6 +375,7 @@ export default function Home() {
                 variant={isTracking ? "default" : "outline"}
                 size="sm"
                 className="gap-2"
+                disabled={!isMediaPipeReady}
               >
                 {isTracking ? (
                   <>
@@ -365,9 +416,9 @@ export default function Home() {
               <p>
                 <strong>ボタン:</strong> Tracking ON/OFF でカメラ追跡の有効/無効、Debug ON/OFF でデバッグ情報の表示/非表示、Reset で視点位置をリセットできます。
               </p>
-              {isLoading && (
+              {!isMediaPipeReady && !error && (
                 <p className="text-yellow-400">
-                  <strong>初期化中...</strong> MediaPipeを読み込んでいます。
+                  <strong>初期化中...</strong> MediaPipeライブラリを読み込んでいます。しばらくお待ちください。
                 </p>
               )}
             </div>
