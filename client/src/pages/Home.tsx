@@ -172,8 +172,13 @@ export default function Home() {
 
   // Wireframe room generation
   const generateWireframeRoom = () => {
-    const w = 640 * scale;
+    const canvas = canvasRef.current;
+    if (!canvas) return [];
+    
+    // Calculate room dimensions based on canvas aspect ratio
+    const aspectRatio = canvas.width / canvas.height;
     const h = 360 * scale;
+    const w = h * aspectRatio;
     const d = 1000 * scale;
     const gridSize = 100 * scale;
 
@@ -320,10 +325,10 @@ export default function Home() {
         const s2 = projectPoint(p2, eyePosEMARef.current);
 
         if (s1 && s2) {
-          const x1 = canvas.width / 2 + s1.x;
-          const y1 = canvas.height / 2 - s1.y;
-          const x2 = canvas.width / 2 + s2.x;
-          const y2 = canvas.height / 2 - s2.y;
+          const x1 = canvas.width / 2 + s1.x * 0.98;
+          const y1 = canvas.height / 2 - s1.y * 0.98;
+          const x2 = canvas.width / 2 + s2.x * 0.98;
+          const y2 = canvas.height / 2 - s2.y * 0.98;
 
           ctx.beginPath();
           ctx.moveTo(x1, y1);
