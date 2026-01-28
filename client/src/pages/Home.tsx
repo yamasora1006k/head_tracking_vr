@@ -295,6 +295,24 @@ export default function Home() {
     };
   }, [isFullscreen]);
 
+  // Update canvas size on window resize
+  useEffect(() => {
+    const handleResize = () => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+
+      const rect = canvas.parentElement?.getBoundingClientRect();
+      if (!rect) return;
+
+      canvas.width = rect.width;
+      canvas.height = rect.height;
+    };
+
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
   // Render loop
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -413,14 +431,10 @@ export default function Home() {
       )}
 
       {/* Main canvas */}
-      <div className="flex-1 flex items-center justify-center overflow-hidden">
+      <div className="flex-1 flex items-center justify-center overflow-hidden w-full">
         <canvas
           ref={canvasRef}
-          width={1280}
-          height={720}
-          className={`${
-            isFullscreen ? "w-full h-full" : "border-2 border-green-500 shadow-2xl max-w-full"
-          }`}
+          className="w-full h-full"
         />
       </div>
 
