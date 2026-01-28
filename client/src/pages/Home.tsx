@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Pause, Play, RotateCcw, AlertCircle, Loader } from "lucide-react";
+import { Pause, Play, RotateCcw, AlertCircle, Loader, Maximize2, Minimize2 } from "lucide-react";
 
 interface EyePosition {
   x: number;
@@ -28,6 +28,7 @@ export default function Home() {
   const [isMediaPipeReady, setIsMediaPipeReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [scale, setScale] = useState(1);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const eyePosEMARef = useRef<EyePosition>({ x: 0, y: 0, z: 800 });
   const lastTimeRef = useRef(Date.now());
@@ -240,6 +241,10 @@ export default function Home() {
     eyePosEMARef.current = { x: 0, y: 0, z: 800 };
   };
 
+  const handleToggleFullscreen = () => {
+    setIsFullscreen(!isFullscreen);
+  };
+
   // Update canvas size on window resize
   useEffect(() => {
     const handleResize = () => {
@@ -268,6 +273,18 @@ export default function Home() {
     window.addEventListener("wheel", handleWheel, { passive: false });
     return () => window.removeEventListener("wheel", handleWheel);
   }, []);
+
+  // Handle ESC key to exit fullscreen
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isFullscreen) {
+        setIsFullscreen(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isFullscreen]);
 
   // Render loop
   useEffect(() => {
@@ -388,6 +405,7 @@ export default function Home() {
       />
 
       {/* Control panel - overlay at bottom */}
+      {!isFullscreen && (
       <div className="absolute bottom-0 left-0 right-0 bg-gray-900/90 border-t border-gray-700 p-4 z-30">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <h1 className="text-lg font-bold text-white">
@@ -429,12 +447,33 @@ export default function Home() {
               <RotateCcw className="w-3 h-3" />
               Reset
             </Button>
+            <Button
+              onClick={handleToggleFullscreen}
+              variant="outline"
+              size="sm"
+              className="gap-2"
+            >
+              <Maximize2 className="w-3 h-3" />
+              Fullscreen
+            </Button>
             <div className="text-white text-sm flex items-center gap-2">
               Zoom: {(scale * 100).toFixed(0)}%
             </div>
           </div>
         </div>
       </div>
+      )}
+
+      {/* Fullscreen exit button */}
+      {isFullscreen && (
+        <button
+          onClick={handleToggleFullscreen}
+          className="absolute top-4 right-4 z-50 bg-black/50 hover:bg-black/70 text-white p-3 rounded transition-colors"
+          title="Exit fullscreen (ESC)"
+        >
+          <Minimize2 className="w-6 h-6" />
+        </button>
+      )}
     </div>
   );
 }
