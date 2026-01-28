@@ -27,6 +27,7 @@ export default function Home() {
   const [eyePos, setEyePos] = useState<EyePosition>({ x: 0, y: 0, z: 800 });
   const [isMediaPipeReady, setIsMediaPipeReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [scale, setScale] = useState(1);
 
   const eyePosEMARef = useRef<EyePosition>({ x: 0, y: 0, z: 800 });
   const lastTimeRef = useRef(Date.now());
@@ -170,10 +171,10 @@ export default function Home() {
 
   // Wireframe room generation
   const generateWireframeRoom = () => {
-    const w = 640;
-    const h = 360;
-    const d = 1000;
-    const gridSize = 100;
+    const w = 640 * scale;
+    const h = 360 * scale;
+    const d = 1000 * scale;
+    const gridSize = 100 * scale;
 
     const lines: Array<[[number, number, number], [number, number, number]]> = [];
 
@@ -252,6 +253,20 @@ export default function Home() {
     handleResize();
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  // Handle mouse wheel for zoom
+  useEffect(() => {
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      setScale((prev) => {
+        const newScale = e.deltaY > 0 ? prev * 0.9 : prev * 1.1;
+        return Math.max(0.5, Math.min(3, newScale));
+      });
+    };
+
+    window.addEventListener("wheel", handleWheel, { passive: false });
+    return () => window.removeEventListener("wheel", handleWheel);
   }, []);
 
   // Render loop
@@ -414,6 +429,9 @@ export default function Home() {
               <RotateCcw className="w-3 h-3" />
               Reset
             </Button>
+            <div className="text-white text-sm flex items-center gap-2">
+              Zoom: {(scale * 100).toFixed(0)}%
+            </div>
           </div>
         </div>
       </div>
