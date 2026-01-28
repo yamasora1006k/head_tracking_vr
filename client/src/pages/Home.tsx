@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Pause, Play, RotateCcw, AlertCircle, Loader, Maximize2, Minimize2 } from "lucide-react";
+import { Pause, Play, RotateCcw, AlertCircle, Loader } from "lucide-react";
 
 interface EyePosition {
   x: number;
@@ -21,7 +20,6 @@ export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const animationRef = useRef<number | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
 
   const [isTracking, setIsTracking] = useState(true);
   const [showDebug, setShowDebug] = useState(true);
@@ -29,7 +27,6 @@ export default function Home() {
   const [eyePos, setEyePos] = useState<EyePosition>({ x: 0, y: 0, z: 800 });
   const [isMediaPipeReady, setIsMediaPipeReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const eyePosEMARef = useRef<EyePosition>({ x: 0, y: 0, z: 800 });
   const lastTimeRef = useRef(Date.now());
@@ -242,70 +239,14 @@ export default function Home() {
     eyePosEMARef.current = { x: 0, y: 0, z: 800 };
   };
 
-  const handleFullscreen = () => {
-    const elem = containerRef.current;
-    if (!elem) return;
-
-    if (!isFullscreen) {
-      if (elem.requestFullscreen) {
-        elem.requestFullscreen().catch((err) => {
-          console.error(`Error attempting to enable fullscreen: ${err.message}`);
-        });
-      } else if ((elem as any).webkitRequestFullscreen) {
-        (elem as any).webkitRequestFullscreen();
-      }
-      setIsFullscreen(true);
-    } else {
-      if (document.fullscreenElement) {
-        document.exitFullscreen();
-      } else if ((document as any).webkitFullscreenElement) {
-        (document as any).webkitExitFullscreen();
-      }
-      setIsFullscreen(false);
-    }
-  };
-
-  // Handle fullscreen change
-  useEffect(() => {
-    const handleFullscreenChange = () => {
-      if (!document.fullscreenElement && !(document as any).webkitFullscreenElement) {
-        setIsFullscreen(false);
-      }
-    };
-
-    document.addEventListener("fullscreenchange", handleFullscreenChange);
-    document.addEventListener("webkitfullscreenchange", handleFullscreenChange);
-    return () => {
-      document.removeEventListener("fullscreenchange", handleFullscreenChange);
-      document.removeEventListener("webkitfullscreenchange", handleFullscreenChange);
-    };
-  }, []);
-
-  // Handle ESC key to exit fullscreen
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && isFullscreen) {
-        handleFullscreen();
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [isFullscreen]);
-
   // Update canvas size on window resize
   useEffect(() => {
     const handleResize = () => {
       const canvas = canvasRef.current;
       if (!canvas) return;
 
-      const rect = canvas.parentElement?.getBoundingClientRect();
-      if (!rect) return;
-
-      canvas.width = rect.width;
-      canvas.height = rect.height;
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
     };
 
     handleResize();
@@ -390,12 +331,7 @@ export default function Home() {
   }, [showDebug]);
 
   return (
-    <div
-      ref={containerRef}
-      className={`bg-black flex flex-col ${
-        isFullscreen ? "fixed inset-0 w-screen h-screen" : "min-h-screen"
-      }`}
-    >
+    <div className="bg-black w-screen h-screen fixed inset-0 overflow-hidden">
       {/* Hidden video element for MediaPipe */}
       <video
         ref={videoRef}
@@ -404,10 +340,10 @@ export default function Home() {
         height="480"
       />
 
-      {/* Error message */}
-      {error && !isFullscreen && (
-        <div className="bg-red-900 border-b border-red-700 p-4">
-          <div className="max-w-6xl mx-auto flex items-center gap-3 text-red-100">
+      {/* Error message - overlay */}
+      {error && (
+        <div className="absolute top-0 left-0 right-0 bg-red-900/80 border-b border-red-700 p-4 z-40">
+          <div className="flex items-center gap-3 text-red-100">
             <AlertCircle className="w-5 h-5 flex-shrink-0" />
             <div>
               <p className="font-semibold">エラー</p>
@@ -417,10 +353,10 @@ export default function Home() {
         </div>
       )}
 
-      {/* Loading message */}
-      {!isMediaPipeReady && !error && !isFullscreen && (
-        <div className="bg-blue-900 border-b border-blue-700 p-4">
-          <div className="max-w-6xl mx-auto flex items-center gap-3 text-blue-100">
+      {/* Loading message - overlay */}
+      {!isMediaPipeReady && !error && (
+        <div className="absolute top-0 left-0 right-0 bg-blue-900/80 border-b border-blue-700 p-4 z-40">
+          <div className="flex items-center gap-3 text-blue-100">
             <Loader className="w-5 h-5 flex-shrink-0 animate-spin" />
             <div>
               <p className="font-semibold">初期化中...</p>
@@ -430,99 +366,57 @@ export default function Home() {
         </div>
       )}
 
-      {/* Main canvas */}
-      <div className="flex-1 flex items-center justify-center overflow-hidden w-full">
-        <canvas
-          ref={canvasRef}
-          className="w-full h-full"
-        />
-      </div>
+      {/* Main canvas - full screen */}
+      <canvas
+        ref={canvasRef}
+        className="w-full h-full"
+      />
 
-      {/* Control panel */}
-      {!isFullscreen && (
-        <div className="bg-gray-900 border-t border-gray-700 p-6">
-          <div className="max-w-6xl mx-auto">
-            <div className="flex items-center justify-between mb-4 flex-wrap gap-4">
-              <h1 className="text-2xl font-bold text-white">
-                Head Tracking Desktop VR
-              </h1>
-              <div className="flex gap-3 flex-wrap">
-                <Button
-                  onClick={() => setIsTracking(!isTracking)}
-                  variant={isTracking ? "default" : "outline"}
-                  size="sm"
-                  className="gap-2"
-                  disabled={!isMediaPipeReady}
-                >
-                  {isTracking ? (
-                    <>
-                      <Pause className="w-4 h-4" />
-                      Tracking ON
-                    </>
-                  ) : (
-                    <>
-                      <Play className="w-4 h-4" />
-                      Tracking OFF
-                    </>
-                  )}
-                </Button>
-                <Button
-                  onClick={() => setShowDebug(!showDebug)}
-                  variant={showDebug ? "default" : "outline"}
-                  size="sm"
-                >
-                  {showDebug ? "Debug ON" : "Debug OFF"}
-                </Button>
-                <Button
-                  onClick={handleReset}
-                  variant="outline"
-                  size="sm"
-                  className="gap-2"
-                >
-                  <RotateCcw className="w-4 h-4" />
-                  Reset
-                </Button>
-                <Button
-                  onClick={handleFullscreen}
-                  variant="outline"
-                  size="sm"
-                  className="gap-2"
-                >
-                  <Maximize2 className="w-4 h-4" />
-                  Fullscreen
-                </Button>
-              </div>
-            </div>
-
-            <Card className="bg-gray-800 border-gray-700">
-              <div className="p-4 space-y-2 text-sm text-gray-300">
-                <p>
-                  <strong>操作方法:</strong> Webカメラを使用して頭の位置を追跡します。頭を左右・上下・前後に動かすと、画面内の部屋がそれに応じて変化します。
-                </p>
-                <p>
-                  <strong>ボタン:</strong> Tracking ON/OFF でカメラ追跡の有効/無効、Debug ON/OFF でデバッグ情報の表示/非表示、Reset で視点位置をリセット、Fullscreen で全画面表示できます。
-                </p>
-                {!isMediaPipeReady && !error && (
-                  <p className="text-yellow-400">
-                    <strong>初期化中...</strong> MediaPipeライブラリを読み込んでいます。しばらくお待ちください。
-                  </p>
-                )}
-              </div>
-            </Card>
+      {/* Control panel - overlay at bottom */}
+      <div className="absolute bottom-0 left-0 right-0 bg-gray-900/90 border-t border-gray-700 p-4 z-30">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <h1 className="text-lg font-bold text-white">
+            Head Tracking Desktop VR
+          </h1>
+          <div className="flex gap-2 flex-wrap">
+            <Button
+              onClick={() => setIsTracking(!isTracking)}
+              variant={isTracking ? "default" : "outline"}
+              size="sm"
+              className="gap-2"
+              disabled={!isMediaPipeReady}
+            >
+              {isTracking ? (
+                <>
+                  <Pause className="w-3 h-3" />
+                  Tracking ON
+                </>
+              ) : (
+                <>
+                  <Play className="w-3 h-3" />
+                  Tracking OFF
+                </>
+              )}
+            </Button>
+            <Button
+              onClick={() => setShowDebug(!showDebug)}
+              variant={showDebug ? "default" : "outline"}
+              size="sm"
+            >
+              {showDebug ? "Debug ON" : "Debug OFF"}
+            </Button>
+            <Button
+              onClick={handleReset}
+              variant="outline"
+              size="sm"
+              className="gap-2"
+            >
+              <RotateCcw className="w-3 h-3" />
+              Reset
+            </Button>
           </div>
         </div>
-      )}
-
-      {/* Fullscreen exit button */}
-      {isFullscreen && (
-        <button
-          onClick={handleFullscreen}
-          className="absolute top-4 right-4 z-50 bg-black/50 hover:bg-black/70 text-white p-2 rounded transition-colors"
-          title="Exit fullscreen (ESC)"
-        >
-          <Minimize2 className="w-6 h-6" />
-        </button>
-      )}
+      </div>
     </div>
   );
 }
