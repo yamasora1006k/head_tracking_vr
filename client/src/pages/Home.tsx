@@ -5,43 +5,76 @@ import { Slider } from "@/components/ui/slider";
 import { Pause, Play, RotateCcw, AlertCircle, Loader, Maximize2, Minimize2, Info } from "lucide-react";
 import { useHeadTracking } from "@/hooks/useHeadTracking";
 // 3D Components
+import { GazeController } from "@/components/vr/GazeController";
 import { CameraRig } from "@/components/vr/CameraRig";
 import { MuseumRoom } from "@/components/vr/MuseumRoom";
 import { ArtFrame } from "@/components/vr/ArtFrame";
 // UI Components
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { CalibrationOverlay } from "@/components/ui/CalibrationOverlay";
+
+interface CalibrationParams {
+  inputXMin: number;
+  inputXMax: number;
+  inputYMin: number;
+  inputYMax: number;
+  matrix?: number[];
+}
 
 export default function Home() {
   const {
     videoRef,
     eyePos,
+    rotation,
+    blink, // New state
+    iris,  // Destructure IRIS
     isTracking,
     setIsTracking,
     isMediaPipeReady,
     error,
     fps,
-    alpha,
-    setAlpha,
-    sensitivity,
-    setSensitivity,
+
+    // New Config
+    trackingMode,
+    setTrackingMode,
+    minCutoff,
+    setMinCutoff,
+    beta,
+    setBeta,
+    speedGain,
+    setSpeedGain,
+
     resetPosition,
     showDebug,
-    setShowDebug
+    setShowDebug,
+    gaze
   } = useHeadTracking();
+
+  // ... (existing state)
+
+  // ... (existing effects)
+
+  // ...
+
+  // In returned JSX, Control Panel section:
+  // Replace the old Alpha/Sensitivity sliders with new controls
+
 
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [screenSize, setScreenSize] = useState({ width: window.innerWidth, height: window.innerHeight });
   const [selectedArt, setSelectedArt] = useState<{ title: string, desc: string, url: string } | null>(null);
 
+  // Calibration State
+  const [isCalibrating, setIsCalibrating] = useState(false);
+  const [calibration, setCalibration] = useState<CalibrationParams | null>(null);
+
   const handleToggleFullscreen = () => {
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen().catch((err) => {
-        console.error(`Error attempting to enable fullscreen: ${err.message}`);
+        console.error(`Error with fullscreen: ${err.message}`);
       });
     } else {
-      if (document.exitFullscreen) {
-        document.exitFullscreen();
-      }
+      if (document.exitFullscreen) document.exitFullscreen();
     }
   };
 
@@ -121,8 +154,14 @@ export default function Home() {
     if (art) setSelectedArt(art);
   };
 
+  const finishCalibration = (data: CalibrationParams) => {
+    setCalibration(data);
+    setIsCalibrating(false);
+    console.log("Calibration Finished:", data);
+  };
+
   return (
-    <div className="bg-black w-screen h-screen fixed inset-0 overflow-hidden select-none">
+    <div className="bg-black w-screen h-screen fixed inset-0 overflow-hidden">
       {/* Hidden video element for MediaPipe */}
       <video
         ref={videoRef}
@@ -157,6 +196,16 @@ export default function Home() {
           </div>
         </div>
       )}
+      {/* Calibration Overlay */}
+      {
+        isCalibrating && (
+          <CalibrationOverlay
+            gaze={gaze}
+            onComplete={finishCalibration}
+            onCancel={() => setIsCalibrating(false)}
+          />
+        )
+      }
 
       {/* 3D Scene */}
       <Canvas>
@@ -167,6 +216,16 @@ export default function Home() {
             screenHeight={screenSize.height}
             near={100}
             far={5000}
+          />
+
+          <GazeController
+            rotation={rotation}
+            iris={iris}
+            gaze={gaze}
+            eyePos={eyePos}
+            isTracking={isTracking}
+            calibration={calibration}
+            trackingMode={trackingMode}
           />
 
           <MuseumRoom
@@ -187,92 +246,70 @@ export default function Home() {
       </Canvas>
 
       {/* Debug Info Overlay */}
-      {showDebug && (
-        <div className="absolute top-4 left-4 text-green-400 font-mono text-sm pointer-events-none z-30 drop-shadow-md">
-          <p>FPS: {fps}</p>
-          <p>Eye X: {eyePos.x.toFixed(1)}</p>
-          <p>Eye Y: {eyePos.y.toFixed(1)}</p>
-          <p>Eye Z: {eyePos.z.toFixed(1)}</p>
-        </div>
-      )}
+      {
+        showDebug && (
+          <div className="absolute top-4 left-4 text-white font-mono bg-black/50 p-2 rounded pointer-events-none z-50">
+            <p>FPS: {fps}</p>
+            <p>Eye ({eyePos.x.toFixed(0)}, {eyePos.y.toFixed(0)}, {eyePos.z.toFixed(0)})</p>
+            <p>Gaze (Y:{gaze.yaw.toFixed(3)}, P:{gaze.pitch.toFixed(3)})</p>
+            <p className={blink.isBlinking ? "text-red-400" : "text-green-400"}>
+              {blink.isBlinking ? "BLINKING" : "EYE OPEN"} (EAR: {((blink.leftEAR + blink.rightEAR) / 2).toFixed(3)})
+            </p>
+            {calibration && (
+              <div className="text-xs text-stone-400 mt-1">
+                Calib: X[{calibration.inputXMin.toFixed(2)}, {calibration.inputXMax.toFixed(2)}] Y[{calibration.inputYMin.toFixed(2)}, {calibration.inputYMax.toFixed(2)}]
+              </div>
+            )}
+          </div>
+        )
+      }
 
       {/* Control panel */}
-      {!isFullscreen && (
-        <div className="absolute bottom-0 left-0 right-0 bg-gray-900/90 border-t border-gray-700 p-4 z-30">
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            <h1 className="text-lg font-bold text-white flex items-center gap-2">
-              <span className="bg-gradient-to-r from-blue-400 to-purple-500 text-transparent bg-clip-text">VR Art Museum</span>
+      {/* Control panel (Dock Style) */}
+      <div className={`fixed bottom-8 left-1/2 -translate-x-1/2 transition-all duration-500 z-50 ${isFullscreen ? 'translate-y-[200%]' : 'translate-y-0'}`}>
+        <div className="flex items-center gap-4 px-6 py-4 bg-black/60 backdrop-blur-xl border border-white/10 rounded-full shadow-2xl hover:bg-black/70 transition-colors">
+
+          {/* Title Section */}
+          <div className="flex flex-col gap-0.5 mr-4 border-r border-white/10 pr-6">
+            <h1 className="text-lg font-bold text-white font-serif tracking-in-expand flex items-center gap-2">
+              VR Art Museum
             </h1>
-            <div className="flex gap-2 flex-wrap">
-              <Button
-                onClick={() => setIsTracking(!isTracking)}
-                variant={isTracking ? "default" : "outline"}
-                size="sm"
-                className="gap-2"
-                disabled={!isMediaPipeReady}
-              >
-                {isTracking ? <><Pause className="w-3 h-3" /> Tracking ON</> : <><Play className="w-3 h-3" /> Tracking OFF</>}
-              </Button>
-              <Button
-                onClick={() => setShowDebug(!showDebug)}
-                variant={showDebug ? "default" : "outline"}
-                size="sm"
-              >
-                {showDebug ? "Debug ON" : "Debug OFF"}
-              </Button>
-              <Button
-                onClick={resetPosition}
-                variant="outline"
-                size="sm"
-                className="gap-2"
-              >
-                <RotateCcw className="w-3 h-3" /> Reset
-              </Button>
-              <Button
-                onClick={handleToggleFullscreen}
-                variant="outline"
-                size="sm"
-                className="gap-2"
-              >
-                <Maximize2 className="w-3 h-3" /> Fullscreen
-              </Button>
-              <div className="flex items-center gap-2 min-w-[140px] ml-2">
-                <span className="text-white text-xs whitespace-nowrap">反応速度: {alpha.toFixed(2)}</span>
-                <Slider
-                  value={[alpha]}
-                  min={0.05}
-                  max={1.0}
-                  step={0.05}
-                  onValueChange={(val) => setAlpha(val[0])}
-                  className="w-24"
-                />
-              </div>
-              <div className="flex items-center gap-2 min-w-[140px] ml-2">
-                <span className="text-white text-xs whitespace-nowrap">感度: {sensitivity.toFixed(1)}</span>
-                <Slider
-                  value={[sensitivity]}
-                  min={1.0}
-                  max={10.0}
-                  step={0.1}
-                  onValueChange={(val) => setSensitivity(val[0])}
-                  className="w-24"
-                />
-              </div>
-            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={resetPosition}
+              variant="ghost"
+              size="sm"
+              className="text-stone-400 hover:text-white hover:bg-white/10 rounded-full transition-all duration-300 hover:scale-105 active:scale-95"
+            >
+              <RotateCcw className="w-4 h-4" />
+            </Button>
+
+            <Button
+              onClick={handleToggleFullscreen}
+              variant="ghost"
+              size="sm"
+              className="text-stone-400 hover:text-white hover:bg-white/10 rounded-full transition-all duration-300 hover:scale-105 active:scale-95"
+            >
+              <Maximize2 className="w-4 h-4" />
+            </Button>
           </div>
         </div>
-      )}
+      </div>
 
       {/* Fullscreen Exit Button */}
-      {isFullscreen && (
-        <button
-          onClick={handleToggleFullscreen}
-          className="absolute top-4 right-4 z-50 bg-black/50 hover:bg-black/70 text-white p-3 rounded transition-colors"
-          title="Exit fullscreen (ESC)"
-        >
-          <Minimize2 className="w-6 h-6" />
-        </button>
-      )}
+      {
+        isFullscreen && (
+          <button
+            onClick={handleToggleFullscreen}
+            className="absolute top-4 right-4 z-50 bg-black/50 hover:bg-black/70 text-white p-3 rounded transition-colors"
+            title="Exit fullscreen (ESC)"
+          >
+            <Minimize2 className="w-6 h-6" />
+          </button>
+        )
+      }
 
       {/* Artwork Details Modal */}
       <Dialog open={!!selectedArt} onOpenChange={(open) => !open && setSelectedArt(null)}>
@@ -294,6 +331,6 @@ export default function Home() {
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+    </div >
   );
 }

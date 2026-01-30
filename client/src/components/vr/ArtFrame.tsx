@@ -41,6 +41,7 @@ export function ArtFrame({ url, title, position, rotation = [0, 0, 0], scale = 1
                 setHovered(false);
                 document.body.style.cursor = 'auto';
             }}
+            userData={{ isArt: true, title }}
         >
             {/* Frame Background */}
             <mesh position={[0, 0, -5]}>
